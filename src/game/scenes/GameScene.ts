@@ -164,7 +164,7 @@ export default class GameScene extends Phaser.Scene {
     earthlingButton.onclick = () => this.handleTeamSelect("earthling");
 
     const chillFlyerButton = document.createElement("button");
-    chillFlyerButton.textContent = "Chill Flyer";
+    chillFlyerButton.textContent = "Earthling (but red)";
     chillFlyerButton.style.margin = "10px";
     chillFlyerButton.style.padding = "10px 20px";
     chillFlyerButton.style.backgroundColor = "#9B59B6";
