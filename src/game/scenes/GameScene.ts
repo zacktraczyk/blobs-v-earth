@@ -11,7 +11,7 @@ export default class GameScene extends Phaser.Scene {
   private playerId: string;
   private team: Team;
   private lastUpdateTime: number = 0;
-  private updateInterval: number = 1000 / 60; // 60 FPS
+  private updateInterval: number = 1000 / 30; // 30 FPS for network updates
   private gameSpeed: number = 200;
   private wasd: {
     W: Phaser.Input.Keyboard.Key;
@@ -26,8 +26,6 @@ export default class GameScene extends Phaser.Scene {
   private lastShootTime: number = 0;
   private shootCooldown: number = 250; // 250ms between shots
   private shootEffect: Phaser.GameObjects.Particles.ParticleEmitter;
-  private shootSound: Phaser.Sound.BaseSound;
-  private hitSound: Phaser.Sound.BaseSound;
   private healthBar: Phaser.GameObjects.Graphics;
   private playerHealth: number = 100;
   private maxHealth: number = 100;
@@ -42,10 +40,6 @@ export default class GameScene extends Phaser.Scene {
     this.load.image("blob", "assets/invader.png");
     this.load.image("projectile", "assets/projectile.png");
     this.load.image("background", "assets/Earth background.png");
-
-    // Load sound effects
-    this.load.audio("shoot", "assets/sounds/shoot.mp3");
-    this.load.audio("hit", "assets/sounds/hit.mp3");
   }
 
   create() {
@@ -122,10 +116,6 @@ export default class GameScene extends Phaser.Scene {
 
     // Show team selection modal
     this.showTeamSelectionModal();
-
-    // Initialize sound effects
-    this.shootSound = this.sound.add("shoot");
-    this.hitSound = this.sound.add("hit");
 
     // Create particle effect for shooting
     const particles = this.add.particles(0, 0, "projectile", {
@@ -263,7 +253,16 @@ export default class GameScene extends Phaser.Scene {
         playerData.maxHealth
       );
     } else {
-      otherPlayer.setPosition(playerData.x, playerData.y);
+      // Update position with interpolation
+      const now = Date.now();
+      const deltaTime = (now - playerData.lastUpdate) / 1000;
+      const distanceX = playerData.velocityX * deltaTime;
+      const distanceY = playerData.velocityY * deltaTime;
+
+      const newX = playerData.x + distanceX;
+      const newY = playerData.y + distanceY;
+
+      otherPlayer.setPosition(newX, newY);
       otherPlayer.setRotation(playerData.rotation);
       this.updateOtherPlayerHealthBar(
         id,
@@ -369,9 +368,6 @@ export default class GameScene extends Phaser.Scene {
     projectile: Phaser.Physics.Arcade.Sprite,
     target: Phaser.Physics.Arcade.Sprite
   ) {
-    // Play hit sound
-    this.hitSound.play();
-
     // Create hit effect
     const hitEffect = this.add.particles(0, 0, "projectile", {
       x: target.x,
@@ -490,23 +486,23 @@ export default class GameScene extends Phaser.Scene {
     if (now - this.lastUpdateTime < this.updateInterval) return;
 
     // Handle player movement with WASD
-    let velocityX = 0;
-    let velocityY = 0;
+    let moveX = 0;
+    let moveY = 0;
 
     if (this.wasd.A.isDown) {
-      velocityX = -this.gameSpeed;
+      moveX = -this.gameSpeed;
     } else if (this.wasd.D.isDown) {
-      velocityX = this.gameSpeed;
+      moveX = this.gameSpeed;
     }
 
     if (this.wasd.W.isDown) {
-      velocityY = -this.gameSpeed;
+      moveY = -this.gameSpeed;
     } else if (this.wasd.S.isDown) {
-      velocityY = this.gameSpeed;
+      moveY = this.gameSpeed;
     }
 
-    // Apply velocity to player
-    this.player.setVelocity(velocityX, velocityY);
+    // Apply movement to player
+    this.player.setVelocity(moveX, moveY);
 
     // Calculate rotation based on mouse position
     const pointer = this.input.activePointer;
@@ -518,13 +514,13 @@ export default class GameScene extends Phaser.Scene {
     );
     this.player.setRotation(angle);
 
-    // Update player state in Firebase
+    // Update player state in Firebase with actual physics body velocity
     this.gameService.updatePlayerState(
       this.player.x,
       this.player.y,
       this.player.rotation,
-      velocityX,
-      velocityY
+      moveX,
+      moveY
     );
 
     // Handle shooting with space key
@@ -547,9 +543,6 @@ export default class GameScene extends Phaser.Scene {
     const spawnOffset = 30;
     const spawnX = this.player.x + Math.cos(angle) * spawnOffset;
     const spawnY = this.player.y + Math.sin(angle) * spawnOffset;
-
-    // Play shoot sound
-    this.shootSound.play();
 
     // Show particle effect
     this.shootEffect.setPosition(spawnX, spawnY);

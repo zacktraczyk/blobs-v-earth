@@ -93,13 +93,19 @@ export class GameService {
     velocityX: number,
     velocityY: number
   ) {
-    set(this.playerRef, {
+    const playerRef = ref(database, `gameState/players/${this.playerId}`);
+    set(playerRef, {
       x,
       y,
       rotation,
       velocityX,
       velocityY,
-      lastUpdate: serverTimestamp(),
+      lastUpdate: Date.now(),
+      team: this.getPlayerData(this.playerId)?.team || "earthling",
+      health: this.getPlayerData(this.playerId)?.health || 100,
+      maxHealth: this.getPlayerData(this.playerId)?.maxHealth || 100,
+    }).catch((error) => {
+      console.error("Error updating player state:", error);
     });
   }
 
