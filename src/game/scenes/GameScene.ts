@@ -39,9 +39,9 @@ export default class GameScene extends Phaser.Scene {
   preload() {
     // Load game assets
     this.load.image("player", "assets/player.png");
-    this.load.image("blob", "assets/blob.png");
+    this.load.image("blob", "assets/invader.png");
     this.load.image("projectile", "assets/projectile.png");
-    this.load.image("background", "assets/background.png");
+    this.load.image("background", "assets/Earth background.png");
 
     // Load sound effects
     this.load.audio("shoot", "assets/sounds/shoot.mp3");
@@ -50,14 +50,35 @@ export default class GameScene extends Phaser.Scene {
 
   create() {
     // Add background
-    const background = this.add.tileSprite(
-      0,
-      0,
-      this.scale.width,
-      this.scale.height,
+    const background = this.add.image(
+      this.scale.width / 2,
+      this.scale.height / 2,
       "background"
     );
-    background.setOrigin(0, 0);
+    background.setOrigin(0.5, 0.5);
+
+    // Scale background to cover the screen while maintaining aspect ratio
+    const scaleX = this.scale.width / background.width;
+    const scaleY = this.scale.height / background.height;
+    const scale = Math.max(scaleX, scaleY);
+    background.setScale(scale);
+
+    // Add reset button
+    const resetButton = document.createElement("button");
+    resetButton.textContent = "Reset Game";
+    resetButton.style.position = "fixed";
+    resetButton.style.top = "20px";
+    resetButton.style.right = "20px";
+    resetButton.style.padding = "10px 20px";
+    resetButton.style.backgroundColor = "#ff4444";
+    resetButton.style.border = "none";
+    resetButton.style.borderRadius = "5px";
+    resetButton.style.color = "white";
+    resetButton.style.cursor = "pointer";
+    resetButton.style.fontSize = "16px";
+    resetButton.style.zIndex = "1000";
+    resetButton.onclick = () => this.handleReset();
+    document.body.appendChild(resetButton);
 
     // Generate a unique player ID if not already set
     this.playerId = `player_${Date.now()}_${Math.random()
@@ -190,10 +211,14 @@ export default class GameScene extends Phaser.Scene {
   private resize(gameSize: Phaser.Structs.Size) {
     // Update background
     const background = this.children.list.find(
-      (child) => child instanceof Phaser.GameObjects.TileSprite
-    ) as Phaser.GameObjects.TileSprite;
+      (child) => child instanceof Phaser.GameObjects.Image
+    ) as Phaser.GameObjects.Image;
     if (background) {
-      background.setSize(gameSize.width, gameSize.height);
+      background.setPosition(gameSize.width / 2, gameSize.height / 2);
+      const scaleX = gameSize.width / background.width;
+      const scaleY = gameSize.height / background.height;
+      const scale = Math.max(scaleX, scaleY);
+      background.setScale(scale);
     }
 
     // Update world bounds
@@ -541,6 +566,32 @@ export default class GameScene extends Phaser.Scene {
     );
 
     this.lastShootTime = now;
+  }
+
+  private handleReset() {
+    // Show confirmation dialog
+    if (
+      confirm(
+        "Are you sure you want to reset the game? This will remove all players and projectiles."
+      )
+    ) {
+      // Reset the game state
+      this.gameService.resetGame();
+
+      // Clear local state
+      this.otherPlayers.forEach((player) => player.destroy());
+      this.otherPlayers.clear();
+      this.projectiles.forEach((projectile) => projectile.destroy());
+      this.projectiles.clear();
+
+      // Reset player health
+      this.playerHealth = this.maxHealth;
+      this.updateHealthBar();
+
+      // Show team selection modal again
+      this.showTeamSelection = true;
+      this.showTeamSelectionModal();
+    }
   }
 
   shutdown() {

@@ -175,4 +175,13 @@ export class GameService {
 
     return playerData;
   }
+
+  resetGame() {
+    const gameStateRef = ref(database, "gameState");
+    set(gameStateRef, {
+      gameStarted: false,
+      players: {},
+      projectiles: {},
+    });
+  }
 }
