@@ -23,15 +23,26 @@ export default class GameScene extends Phaser.Scene {
   }
 
   create() {
-    // Add background
-    this.add.tileSprite(0, 0, 800, 600, "background").setOrigin(0);
+    // Add background that covers the entire game area
+    const background = this.add.tileSprite(
+      0,
+      0,
+      this.scale.width,
+      this.scale.height,
+      "background"
+    );
+    background.setOrigin(0, 0);
 
     // Add Earth in the center
-    this.earth = this.add.sprite(400, 300, "earth");
+    this.earth = this.add.sprite(
+      this.scale.width / 2,
+      this.scale.height / 2,
+      "earth"
+    );
     this.earth.setScale(2);
 
     // Create player
-    this.player = this.physics.add.sprite(100, 300, "player");
+    this.player = this.physics.add.sprite(100, this.scale.height / 2, "player");
     this.player.setCollideWorldBounds(true);
 
     // Setup input
@@ -57,6 +68,27 @@ export default class GameScene extends Phaser.Scene {
       undefined,
       this
     );
+
+    // Handle window resize
+    this.scale.on("resize", this.resize, this);
+  }
+
+  resize(gameSize: Phaser.Structs.Size) {
+    // Update background
+    const background = this.children.list.find(
+      (child) => child instanceof Phaser.GameObjects.TileSprite
+    ) as Phaser.GameObjects.TileSprite;
+    if (background) {
+      background.setSize(gameSize.width, gameSize.height);
+    }
+
+    // Update earth position
+    if (this.earth) {
+      this.earth.setPosition(gameSize.width / 2, gameSize.height / 2);
+    }
+
+    // Update world bounds
+    this.physics.world.setBounds(0, 0, gameSize.width, gameSize.height);
   }
 
   update() {
@@ -114,20 +146,20 @@ export default class GameScene extends Phaser.Scene {
 
     switch (side) {
       case 0: // top
-        x = Phaser.Math.Between(0, 800);
+        x = Phaser.Math.Between(0, this.scale.width);
         y = -50;
         break;
       case 1: // right
-        x = 850;
-        y = Phaser.Math.Between(0, 600);
+        x = this.scale.width + 50;
+        y = Phaser.Math.Between(0, this.scale.height);
         break;
       case 2: // bottom
-        x = Phaser.Math.Between(0, 800);
-        y = 650;
+        x = Phaser.Math.Between(0, this.scale.width);
+        y = this.scale.height + 50;
         break;
       case 3: // left
         x = -50;
-        y = Phaser.Math.Between(0, 600);
+        y = Phaser.Math.Between(0, this.scale.height);
         break;
     }
 
