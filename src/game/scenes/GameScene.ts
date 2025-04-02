@@ -361,21 +361,21 @@ export default class GameScene extends Phaser.Scene {
     const hitEffect = this.add.particles(0, 0, "projectile", {
       x: projectile.x,
       y: projectile.y,
-      speed: 300,
-      scale: { start: 2, end: 0 },
+      speed: 400,
+      scale: { start: 3, end: 0 },
       alpha: { start: 1, end: 0 },
-      lifespan: 1000,
-      quantity: 30,
+      lifespan: 1500,
+      quantity: 50,
       blendMode: "ADD",
       emitting: true,
       emitZone: {
         type: "random",
-        source: new Phaser.Geom.Circle(projectile.x, projectile.y, 30),
+        source: new Phaser.Geom.Circle(projectile.x, projectile.y, 50),
       },
     });
 
     // Remove hit effect after animation
-    this.time.delayedCall(1000, () => {
+    this.time.delayedCall(1500, () => {
       hitEffect.destroy();
     });
 
@@ -413,16 +413,16 @@ export default class GameScene extends Phaser.Scene {
     const deathEffect = this.add.particles(0, 0, "projectile", {
       x: this.player.x,
       y: this.player.y,
-      speed: 300,
-      scale: { start: 2, end: 0 },
+      speed: 500,
+      scale: { start: 4, end: 0 },
       alpha: { start: 1, end: 0 },
-      lifespan: 1500,
-      quantity: 40,
+      lifespan: 2000,
+      quantity: 80,
       blendMode: "ADD",
       emitting: true,
       emitZone: {
         type: "random",
-        source: new Phaser.Geom.Circle(this.player.x, this.player.y, 20),
+        source: new Phaser.Geom.Circle(this.player.x, this.player.y, 100),
       },
     });
 
