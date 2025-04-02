@@ -1,5 +1,5 @@
 import "phaser";
-import MainScene from "./scenes/MainScene";
+import GameScene from "./scenes/GameScene";
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -7,11 +7,11 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   width: 800,
   height: 600,
   backgroundColor: "#000000",
-  scene: MainScene,
+  scene: GameScene,
   physics: {
     default: "arcade",
     arcade: {
-      gravity: { x: 0, y: 0 },
+      gravity: { x: 0, y: 300 },
       debug: false,
     },
   },
