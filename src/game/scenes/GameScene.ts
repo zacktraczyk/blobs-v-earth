@@ -314,6 +314,7 @@ export default class GameScene extends Phaser.Scene {
       );
       projectile.setOrigin(0.5, 0.5);
       projectile.setScale(0.3);
+      projectile.setRotation(projectileData.angle);
       this.projectiles.set(id, projectile);
 
       // Add collision detection
@@ -335,32 +336,6 @@ export default class GameScene extends Phaser.Scene {
           this
         );
       });
-    } else {
-      // Update position based on velocity and time
-      const now = Date.now();
-      const deltaTime = (now - projectileData.lastUpdate) / 1000;
-      const distance = projectileData.speed * deltaTime;
-
-      const newX = projectileData.x + Math.cos(projectileData.angle) * distance;
-      const newY = projectileData.y + Math.sin(projectileData.angle) * distance;
-
-      // Update the projectile position
-      projectile.setPosition(newX, newY);
-      projectile.setRotation(projectileData.angle);
-
-      // Update Firebase with new position
-      this.gameService.updateProjectilePosition(id, newX, newY);
-
-      // Remove projectile if it's out of bounds
-      if (
-        newX < 0 ||
-        newX > this.scale.width ||
-        newY < 0 ||
-        newY > this.scale.height
-      ) {
-        projectile.destroy();
-        this.projectiles.delete(id);
-      }
     }
   }
 
@@ -538,7 +513,6 @@ export default class GameScene extends Phaser.Scene {
     const now = Date.now();
     if (now - this.lastShootTime < this.shootCooldown) return;
 
-    const projectileSpeed = 400;
     const angle = this.player.rotation;
     const spawnOffset = 30;
     const spawnX = this.player.x + Math.cos(angle) * spawnOffset;
@@ -549,14 +523,7 @@ export default class GameScene extends Phaser.Scene {
     this.shootEffect.setAngle(angle * (180 / Math.PI));
     this.shootEffect.start();
 
-    this.gameService.fireProjectile(
-      spawnX,
-      spawnY,
-      angle,
-      projectileSpeed,
-      10,
-      this.team
-    );
+    this.gameService.fireProjectile(spawnX, spawnY, angle, this.team);
 
     this.lastShootTime = now;
   }

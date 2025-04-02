@@ -41,11 +41,8 @@ export interface Projectile {
   x: number;
   y: number;
   angle: number;
-  speed: number;
-  damage: number;
   team: Team;
   timestamp: number;
-  lastUpdate: number;
 }
 
 export class GameService {
@@ -109,36 +106,14 @@ export class GameService {
     });
   }
 
-  fireProjectile(
-    x: number,
-    y: number,
-    angle: number,
-    speed: number,
-    damage: number,
-    team: Team
-  ) {
+  fireProjectile(x: number, y: number, angle: number, team: Team) {
     const projectileRef = push(this.projectilesRef);
     set(projectileRef, {
       x,
       y,
       angle,
-      speed,
-      damage,
       team,
       timestamp: serverTimestamp(),
-      lastUpdate: serverTimestamp(),
-    });
-  }
-
-  updateProjectilePosition(projectileId: string, x: number, y: number) {
-    const projectileRef = ref(
-      database,
-      `gameState/projectiles/${projectileId}`
-    );
-    update(projectileRef, {
-      x,
-      y,
-      lastUpdate: serverTimestamp(),
     });
   }
 
