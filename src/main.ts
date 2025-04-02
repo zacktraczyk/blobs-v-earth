@@ -1,20 +1,27 @@
 import "./style.css";
-import { gameConfig } from "./game/config";
-import "phaser";
-import { TeamSelectionModal } from "./components/TeamSelectionModal";
-import { GameService, Team } from "./game/services/GameService";
+import { Game } from "phaser";
+import GameScene from "./game/scenes/GameScene";
+import { GameService } from "./game/services/GameService";
 
-// Create game service
-const gameService = new GameService();
+// Generate a unique player ID
+const playerId = `player_${Date.now()}_${Math.random()
+  .toString(36)
+  .substr(2, 9)}`;
 
-// Create and export the game instance
-export const game = new Phaser.Game(gameConfig);
+const gameService = new GameService(playerId);
 
-// Show team selection modal
-new TeamSelectionModal((team: Team) => {
-  // Store the selected team in the game registry
-  game.registry.set("playerTeam", team);
+const config: Phaser.Types.Core.GameConfig = {
+  type: Phaser.AUTO,
+  width: window.innerWidth,
+  height: window.innerHeight,
+  physics: {
+    default: "arcade",
+    arcade: {
+      gravity: { x: 0, y: 0 },
+      debug: false,
+    },
+  },
+  scene: GameScene,
+};
 
-  // Start the game
-  game.scene.start("GameScene");
-});
+const game = new Game(config);

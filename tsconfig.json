@@ -21,7 +21,9 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": false,
     "noImplicitAny": false,
-    "strictNullChecks": false
+    "strictNullChecks": false,
+    /* JSX */
+    "jsx": "react-jsx"
   },
   "include": [
     "src"

@@ -1,103 +1,118 @@
-import {
-  ref,
-  onValue,
-  set,
-  push,
-  remove,
-  serverTimestamp,
-} from "firebase/database";
-import { database } from "../../firebase/config";
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, onValue, set, get } from "firebase/database";
 
-export type Team = "blob" | "earthling";
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
 
-export interface Player {
-  id: string;
-  x: number;
-  y: number;
-  rotation: number;
-  team: Team;
-  lastUpdate: number;
-}
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
 
 export interface GameState {
-  players: { [key: string]: Player };
-  earth: {
-    health: number;
-    x: number;
-    y: number;
+  players: {
+    [key: string]: {
+      x: number;
+      y: number;
+      team: "red" | "blue";
+      score: number;
+    };
+  };
+  projectiles: {
+    [key: string]: {
+      x: number;
+      y: number;
+      angle: number;
+      team: "red" | "blue";
+    };
+  };
+  invaders: {
+    [key: string]: {
+      x: number;
+      y: number;
+      health: number;
+    };
   };
 }
 
 export class GameService {
-  private gameStateRef = ref(database, "gameState");
-  private playerRef: any = null;
-  private currentPlayerId: string | null = null;
+  private gameRef = ref(database, "game");
+  private playerRef: any;
+  private playerId: string;
+  private team: "red" | "blue";
+  private score: number = 0;
 
-  constructor() {
-    // Listen for game state changes
-    onValue(this.gameStateRef, (snapshot) => {
-      const gameState = snapshot.val() as GameState;
-      if (gameState) {
-        this.onGameStateUpdate(gameState);
-      }
-    });
+  constructor(playerId: string) {
+    this.playerId = playerId;
+    this.playerRef = ref(database, `game/players/${playerId}`);
   }
 
-  public joinGame(team: Team, x: number, y: number): string {
-    // Create a new player entry
-    const newPlayerRef = push(ref(database, "gameState/players"));
-    this.currentPlayerId = newPlayerRef.key!;
-    this.playerRef = newPlayerRef;
-
-    // Set initial player data
-    const player: Player = {
-      id: this.currentPlayerId,
-      x,
-      y,
-      rotation: 0,
-      team,
-      lastUpdate: Date.now(),
+  async initializeGame(): Promise<void> {
+    const initialState: GameState = {
+      players: {},
+      projectiles: {},
+      invaders: {},
     };
-
-    set(newPlayerRef, player);
-
-    return this.currentPlayerId;
+    await set(this.gameRef, initialState);
   }
 
-  public updatePlayerPosition(x: number, y: number, rotation: number) {
-    if (!this.playerRef) return;
-
-    const player: Partial<Player> = {
-      x,
-      y,
-      rotation,
-      lastUpdate: Date.now(),
-    };
-
-    set(this.playerRef, player, true);
-  }
-
-  public shootProjectile(x: number, y: number, angle: number, team: Team) {
-    const projectileRef = push(ref(database, "gameState/projectiles"));
-    set(projectileRef, {
-      x,
-      y,
-      angle,
+  async joinGame(team: "red" | "blue"): Promise<void> {
+    this.team = team;
+    const player = {
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
       team,
-      timestamp: serverTimestamp(),
+      score: 0,
+    };
+    await set(this.playerRef, player);
+  }
+
+  async updatePlayerPosition(x: number, y: number): Promise<void> {
+    const player = {
+      x,
+      y,
+      team: this.team,
+      score: this.score,
+    };
+    await set(this.playerRef, player);
+  }
+
+  async fireProjectile(x: number, y: number, angle: number): Promise<void> {
+    const projectileId = `projectile_${Date.now()}`;
+    const projectileRef = ref(database, `game/projectiles/${projectileId}`);
+    await set(projectileRef, { x, y, angle, team: this.team });
+  }
+
+  async spawnInvader(x: number, y: number): Promise<void> {
+    const invaderId = `invader_${Date.now()}`;
+    const invaderRef = ref(database, `game/invaders/${invaderId}`);
+    await set(invaderRef, { x, y, health: 100 });
+  }
+
+  async updateInvaderHealth(invaderId: string, health: number): Promise<void> {
+    const invaderRef = ref(database, `game/invaders/${invaderId}`);
+    await set(invaderRef, { health });
+  }
+
+  async removeProjectile(projectileId: string): Promise<void> {
+    const projectileRef = ref(database, `game/projectiles/${projectileId}`);
+    await set(projectileRef, null);
+  }
+
+  async removeInvader(invaderId: string): Promise<void> {
+    const invaderRef = ref(database, `game/invaders/${invaderId}`);
+    await set(invaderRef, null);
+  }
+
+  onGameStateUpdate(callback: (state: GameState) => void): () => void {
+    return onValue(this.gameRef, (snapshot) => {
+      const state = snapshot.val() as GameState;
+      callback(state);
     });
-  }
-
-  public leaveGame() {
-    if (this.playerRef) {
-      remove(this.playerRef);
-      this.playerRef = null;
-      this.currentPlayerId = null;
-    }
-  }
-
-  private onGameStateUpdate(gameState: GameState) {
-    // This will be implemented in the GameScene
-    // to handle updates from other players
   }
 }
