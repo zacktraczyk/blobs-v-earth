@@ -19,7 +19,10 @@ export default class GameScene extends Phaser.Scene {
     S: Phaser.Input.Keyboard.Key;
     D: Phaser.Input.Keyboard.Key;
   };
+  private spaceKey: Phaser.Input.Keyboard.Key;
   private showTeamSelection: boolean = true;
+  private lastProjectileUpdate: number = 0;
+  private projectileUpdateInterval: number = 1000 / 60; // 60 FPS
 
   constructor() {
     super({ key: "GameScene" });
@@ -62,6 +65,9 @@ export default class GameScene extends Phaser.Scene {
       S: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       D: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
+    this.spaceKey = this.input.keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.SPACE
+    );
 
     // Create player sprite (will be updated after team selection)
     this.player = this.physics.add.sprite(400, 300, "player");
@@ -211,8 +217,31 @@ export default class GameScene extends Phaser.Scene {
       projectile.setScale(0.3);
       this.projectiles.set(id, projectile);
     } else {
-      projectile.setPosition(projectileData.x, projectileData.y);
+      // Update position based on velocity and time
+      const now = Date.now();
+      const deltaTime = (now - projectileData.lastUpdate) / 1000; // Convert to seconds
+      const distance = projectileData.speed * deltaTime;
+
+      const newX = projectileData.x + Math.cos(projectileData.angle) * distance;
+      const newY = projectileData.y + Math.sin(projectileData.angle) * distance;
+
+      // Update the projectile position
+      projectile.setPosition(newX, newY);
       projectile.setRotation(projectileData.angle);
+
+      // Update Firebase with new position
+      this.gameService.updateProjectilePosition(id, newX, newY);
+
+      // Remove projectile if it's out of bounds
+      if (
+        newX < 0 ||
+        newX > this.scale.width ||
+        newY < 0 ||
+        newY > this.scale.height
+      ) {
+        projectile.destroy();
+        this.projectiles.delete(id);
+      }
     }
   }
 
@@ -258,8 +287,8 @@ export default class GameScene extends Phaser.Scene {
       this.player.body.velocity.y
     );
 
-    // Handle shooting
-    if (pointer.isDown) {
+    // Handle shooting with space key
+    if (this.spaceKey.isDown) {
       this.shoot();
     }
 
@@ -273,7 +302,14 @@ export default class GameScene extends Phaser.Scene {
     const spawnX = this.player.x + Math.cos(angle) * spawnOffset;
     const spawnY = this.player.y + Math.sin(angle) * spawnOffset;
 
-    this.gameService.fireProjectile(spawnX, spawnY, angle, projectileSpeed, 10);
+    this.gameService.fireProjectile(
+      spawnX,
+      spawnY,
+      angle,
+      projectileSpeed,
+      10,
+      this.team
+    );
   }
 
   shutdown() {

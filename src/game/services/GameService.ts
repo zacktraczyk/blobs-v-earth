@@ -7,6 +7,7 @@ import {
   push,
   remove,
   serverTimestamp,
+  update,
 } from "firebase/database";
 
 const firebaseConfig = {
@@ -42,6 +43,7 @@ export interface Projectile {
   damage: number;
   team: Team;
   timestamp: number;
+  lastUpdate: number;
 }
 
 export class GameService {
@@ -50,6 +52,8 @@ export class GameService {
   private playerRef: any;
   private projectilesRef: any;
   private onGameStateUpdateCallback: ((state: any) => void) | null = null;
+  private lastUpdateTime: number = 0;
+  private updateInterval: number = 1000 / 60; // 60 FPS
 
   constructor(playerId: string) {
     this.playerId = playerId;
@@ -100,7 +104,8 @@ export class GameService {
     y: number,
     angle: number,
     speed: number,
-    damage: number
+    damage: number,
+    team: Team
   ) {
     const projectileRef = push(this.projectilesRef);
     set(projectileRef, {
@@ -109,8 +114,21 @@ export class GameService {
       angle,
       speed,
       damage,
-      team: "earthling", // This will be updated based on player's team
+      team,
       timestamp: serverTimestamp(),
+      lastUpdate: serverTimestamp(),
+    });
+  }
+
+  updateProjectilePosition(projectileId: string, x: number, y: number) {
+    const projectileRef = ref(
+      database,
+      `gameState/projectiles/${projectileId}`
+    );
+    update(projectileRef, {
+      x,
+      y,
+      lastUpdate: serverTimestamp(),
     });
   }
 
