@@ -23,6 +23,14 @@ export default class GameScene extends Phaser.Scene {
   private showTeamSelection: boolean = true;
   private lastProjectileUpdate: number = 0;
   private projectileUpdateInterval: number = 1000 / 60; // 60 FPS
+  private lastShootTime: number = 0;
+  private shootCooldown: number = 250; // 250ms between shots
+  private shootEffect: Phaser.GameObjects.Particles.ParticleEmitter;
+  private shootSound: Phaser.Sound.BaseSound;
+  private hitSound: Phaser.Sound.BaseSound;
+  private healthBar: Phaser.GameObjects.Graphics;
+  private playerHealth: number = 100;
+  private maxHealth: number = 100;
 
   constructor() {
     super({ key: "GameScene" });
@@ -34,6 +42,10 @@ export default class GameScene extends Phaser.Scene {
     this.load.image("blob", "assets/blob.png");
     this.load.image("projectile", "assets/projectile.png");
     this.load.image("background", "assets/background.png");
+
+    // Load sound effects
+    this.load.audio("shoot", "assets/sounds/shoot.mp3");
+    this.load.audio("hit", "assets/sounds/hit.mp3");
   }
 
   create() {
@@ -89,6 +101,26 @@ export default class GameScene extends Phaser.Scene {
 
     // Show team selection modal
     this.showTeamSelectionModal();
+
+    // Initialize sound effects
+    this.shootSound = this.sound.add("shoot");
+    this.hitSound = this.sound.add("hit");
+
+    // Create particle effect for shooting
+    const particles = this.add.particles(0, 0, "projectile", {
+      speed: 100,
+      scale: { start: 0.2, end: 0 },
+      alpha: { start: 0.6, end: 0 },
+      lifespan: 200,
+      quantity: 5,
+      blendMode: "ADD",
+    });
+    particles.stop();
+    this.shootEffect = particles;
+
+    // Create health bar
+    this.healthBar = this.add.graphics();
+    this.updateHealthBar();
   }
 
   private showTeamSelectionModal() {
@@ -196,10 +228,53 @@ export default class GameScene extends Phaser.Scene {
       otherPlayer.setOrigin(0.5, 0.5);
       otherPlayer.setScale(0.5);
       this.otherPlayers.set(id, otherPlayer);
+
+      // Add health bar for other player
+      const healthBar = this.add.graphics();
+      otherPlayer.setData("healthBar", healthBar);
+      this.updateOtherPlayerHealthBar(
+        id,
+        playerData.health,
+        playerData.maxHealth
+      );
     } else {
       otherPlayer.setPosition(playerData.x, playerData.y);
       otherPlayer.setRotation(playerData.rotation);
+      this.updateOtherPlayerHealthBar(
+        id,
+        playerData.health,
+        playerData.maxHealth
+      );
     }
+  }
+
+  private updateOtherPlayerHealthBar(
+    id: string,
+    health: number,
+    maxHealth: number
+  ) {
+    const otherPlayer = this.otherPlayers.get(id);
+    if (!otherPlayer) return;
+
+    const healthBar = otherPlayer.getData(
+      "healthBar"
+    ) as Phaser.GameObjects.Graphics;
+    if (!healthBar) return;
+
+    healthBar.clear();
+
+    // Background (red)
+    healthBar.fillStyle(0xff0000, 0.5);
+    healthBar.fillRect(otherPlayer.x - 25, otherPlayer.y - 40, 50, 5);
+
+    // Health (green)
+    healthBar.fillStyle(0x00ff00, 0.5);
+    healthBar.fillRect(
+      otherPlayer.x - 25,
+      otherPlayer.y - 40,
+      (health / maxHealth) * 50,
+      5
+    );
   }
 
   private updateProjectile(id: string, projectileData: Projectile) {
@@ -216,10 +291,30 @@ export default class GameScene extends Phaser.Scene {
       projectile.setOrigin(0.5, 0.5);
       projectile.setScale(0.3);
       this.projectiles.set(id, projectile);
+
+      // Add collision detection
+      this.physics.add.overlap(
+        projectile,
+        this.player,
+        this.handleProjectileHit,
+        undefined,
+        this
+      );
+
+      // Add collision with other players
+      this.otherPlayers.forEach((otherPlayer) => {
+        this.physics.add.overlap(
+          projectile,
+          otherPlayer,
+          this.handleProjectileHit,
+          undefined,
+          this
+        );
+      });
     } else {
       // Update position based on velocity and time
       const now = Date.now();
-      const deltaTime = (now - projectileData.lastUpdate) / 1000; // Convert to seconds
+      const deltaTime = (now - projectileData.lastUpdate) / 1000;
       const distance = projectileData.speed * deltaTime;
 
       const newX = projectileData.x + Math.cos(projectileData.angle) * distance;
@@ -245,6 +340,124 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  private handleProjectileHit(
+    projectile: Phaser.Physics.Arcade.Sprite,
+    target: Phaser.Physics.Arcade.Sprite
+  ) {
+    // Play hit sound
+    this.hitSound.play();
+
+    // Create hit effect
+    const hitEffect = this.add.particles(0, 0, "projectile", {
+      x: target.x,
+      y: target.y,
+      speed: 50,
+      scale: { start: 0.3, end: 0 },
+      alpha: { start: 0.8, end: 0 },
+      lifespan: 300,
+      quantity: 8,
+      blendMode: "ADD",
+    });
+
+    // Remove hit effect after animation
+    this.time.delayedCall(300, () => {
+      hitEffect.destroy();
+    });
+
+    // Handle damage
+    if (target === this.player) {
+      this.playerHealth -= 10;
+      this.updateHealthBar();
+      this.gameService.updatePlayerHealth(this.playerHealth);
+
+      // Check for player death
+      if (this.playerHealth <= 0) {
+        this.handlePlayerDeath();
+      }
+    } else {
+      // Handle damage to other players
+      const playerId = Object.keys(this.otherPlayers).find(
+        (id) => this.otherPlayers.get(id) === target
+      );
+      if (playerId) {
+        const playerData = this.gameService.getPlayerData(playerId);
+        if (playerData) {
+          const newHealth = Math.max(0, playerData.health - 10);
+          this.gameService.updateOtherPlayerHealth(playerId, newHealth);
+        }
+      }
+    }
+
+    // Remove projectile
+    projectile.destroy();
+    this.projectiles.delete(projectile.texture.key);
+  }
+
+  private handlePlayerDeath() {
+    // Show death effect
+    const deathEffect = this.add.particles(0, 0, "projectile", {
+      x: this.player.x,
+      y: this.player.y,
+      speed: 100,
+      scale: { start: 0.5, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: 1000,
+      quantity: 20,
+      blendMode: "ADD",
+    });
+
+    // Hide player
+    this.player.setVisible(false);
+    this.healthBar.setVisible(false);
+
+    // Show respawn message
+    const respawnText = this.add
+      .text(
+        this.scale.width / 2,
+        this.scale.height / 2,
+        "Press SPACE to respawn",
+        {
+          fontSize: "32px",
+          color: "#ffffff",
+        }
+      )
+      .setOrigin(0.5);
+
+    // Listen for respawn
+    const respawnHandler = () => {
+      this.playerHealth = this.maxHealth;
+      this.player.setPosition(
+        Math.random() * this.scale.width,
+        Math.random() * this.scale.height
+      );
+      this.player.setVisible(true);
+      this.healthBar.setVisible(true);
+      this.updateHealthBar();
+      this.gameService.updatePlayerHealth(this.playerHealth);
+      respawnText.destroy();
+      this.input.keyboard.removeListener("keydown-SPACE", respawnHandler);
+    };
+
+    this.input.keyboard.on("keydown-SPACE", respawnHandler);
+  }
+
+  private updateHealthBar() {
+    this.healthBar.clear();
+
+    // Background (red)
+    this.healthBar.fillStyle(0xff0000, 0.5);
+    this.healthBar.fillRect(this.player.x - 25, this.player.y - 40, 50, 5);
+
+    // Health (green)
+    this.healthBar.fillStyle(0x00ff00, 0.5);
+    this.healthBar.fillRect(
+      this.player.x - 25,
+      this.player.y - 40,
+      (this.playerHealth / this.maxHealth) * 50,
+      5
+    );
+  }
+
   update() {
     if (this.showTeamSelection) return;
 
@@ -252,21 +465,23 @@ export default class GameScene extends Phaser.Scene {
     if (now - this.lastUpdateTime < this.updateInterval) return;
 
     // Handle player movement with WASD
+    let velocityX = 0;
+    let velocityY = 0;
+
     if (this.wasd.A.isDown) {
-      this.player.setVelocityX(-this.gameSpeed);
+      velocityX = -this.gameSpeed;
     } else if (this.wasd.D.isDown) {
-      this.player.setVelocityX(this.gameSpeed);
-    } else {
-      this.player.setVelocityX(0);
+      velocityX = this.gameSpeed;
     }
 
     if (this.wasd.W.isDown) {
-      this.player.setVelocityY(-this.gameSpeed);
+      velocityY = -this.gameSpeed;
     } else if (this.wasd.S.isDown) {
-      this.player.setVelocityY(this.gameSpeed);
-    } else {
-      this.player.setVelocityY(0);
+      velocityY = this.gameSpeed;
     }
+
+    // Apply velocity to player
+    this.player.setVelocity(velocityX, velocityY);
 
     // Calculate rotation based on mouse position
     const pointer = this.input.activePointer;
@@ -283,8 +498,8 @@ export default class GameScene extends Phaser.Scene {
       this.player.x,
       this.player.y,
       this.player.rotation,
-      this.player.body.velocity.x,
-      this.player.body.velocity.y
+      velocityX,
+      velocityY
     );
 
     // Handle shooting with space key
@@ -292,15 +507,29 @@ export default class GameScene extends Phaser.Scene {
       this.shoot();
     }
 
+    // Update health bar position
+    this.updateHealthBar();
+
     this.lastUpdateTime = now;
   }
 
   private shoot() {
+    const now = Date.now();
+    if (now - this.lastShootTime < this.shootCooldown) return;
+
     const projectileSpeed = 400;
     const angle = this.player.rotation;
-    const spawnOffset = 30; // Spawn projectile at the front of the player
+    const spawnOffset = 30;
     const spawnX = this.player.x + Math.cos(angle) * spawnOffset;
     const spawnY = this.player.y + Math.sin(angle) * spawnOffset;
+
+    // Play shoot sound
+    this.shootSound.play();
+
+    // Show particle effect
+    this.shootEffect.setPosition(spawnX, spawnY);
+    this.shootEffect.setAngle(angle * (180 / Math.PI));
+    this.shootEffect.start();
 
     this.gameService.fireProjectile(
       spawnX,
@@ -310,6 +539,8 @@ export default class GameScene extends Phaser.Scene {
       10,
       this.team
     );
+
+    this.lastShootTime = now;
   }
 
   shutdown() {

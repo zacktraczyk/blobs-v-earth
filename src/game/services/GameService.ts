@@ -33,6 +33,8 @@ export interface Player {
   velocityY: number;
   team: Team;
   lastUpdate: number;
+  health: number;
+  maxHealth: number;
 }
 
 export interface Projectile {
@@ -71,6 +73,8 @@ export class GameService {
       velocityY: 0,
       team,
       lastUpdate: serverTimestamp(),
+      health: 100,
+      maxHealth: 100,
     });
   }
 
@@ -140,5 +144,35 @@ export class GameService {
         this.onGameStateUpdateCallback(state);
       }
     });
+  }
+
+  updatePlayerHealth(health: number) {
+    set(this.playerRef, {
+      health,
+      lastUpdate: serverTimestamp(),
+    });
+  }
+
+  updateOtherPlayerHealth(playerId: string, health: number) {
+    const playerRef = ref(database, `gameState/players/${playerId}`);
+    set(playerRef, {
+      health,
+      lastUpdate: serverTimestamp(),
+    });
+  }
+
+  getPlayerData(playerId: string): Player | null {
+    const playerRef = ref(database, `gameState/players/${playerId}`);
+    let playerData: Player | null = null;
+
+    onValue(
+      playerRef,
+      (snapshot) => {
+        playerData = snapshot.val();
+      },
+      { onlyOnce: true }
+    );
+
+    return playerData;
   }
 }
