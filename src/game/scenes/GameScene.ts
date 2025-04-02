@@ -37,6 +37,7 @@ export default class GameScene extends Phaser.Scene {
   preload() {
     // Load game assets
     this.load.image("player", "assets/player.png");
+    this.load.image("player2", "assets/player2.png");
     this.load.image("blob", "assets/Blob.png");
     this.load.image("projectile", "assets/projectile.png");
     this.load.image("background", "assets/Earth background.png");
@@ -162,6 +163,17 @@ export default class GameScene extends Phaser.Scene {
     earthlingButton.style.cursor = "pointer";
     earthlingButton.onclick = () => this.handleTeamSelect("earthling");
 
+    const chillFlyerButton = document.createElement("button");
+    chillFlyerButton.textContent = "Chill Flyer";
+    chillFlyerButton.style.margin = "10px";
+    chillFlyerButton.style.padding = "10px 20px";
+    chillFlyerButton.style.backgroundColor = "#9B59B6";
+    chillFlyerButton.style.border = "none";
+    chillFlyerButton.style.borderRadius = "5px";
+    chillFlyerButton.style.color = "white";
+    chillFlyerButton.style.cursor = "pointer";
+    chillFlyerButton.onclick = () => this.handleTeamSelect("chillFlyer");
+
     const blobButton = document.createElement("button");
     blobButton.textContent = "Blob";
     blobButton.style.margin = "10px";
@@ -174,6 +186,7 @@ export default class GameScene extends Phaser.Scene {
     blobButton.onclick = () => this.handleTeamSelect("blob");
 
     modal.appendChild(earthlingButton);
+    modal.appendChild(chillFlyerButton);
     modal.appendChild(blobButton);
     document.body.appendChild(modal);
   }
@@ -183,10 +196,20 @@ export default class GameScene extends Phaser.Scene {
     this.showTeamSelection = false;
 
     // Update player appearance based on team
-    this.player.setTexture(team === "earthling" ? "player" : "blob");
+    if (team === "earthling") {
+      this.player.setTexture("player");
+      this.player.setTint(0x4b79a1);
+      this.player.setScale(0.5);
+    } else if (team === "chillFlyer") {
+      this.player.setTexture("player2");
+      this.player.setTint(0x9b59b6);
+      this.player.setScale(0.5);
+    } else {
+      this.player.setTexture("blob");
+      this.player.setTint(0xffffff);
+      this.player.setScale(0.2);
+    }
     this.player.setVisible(true);
-    this.player.setTint(team === "earthling" ? 0x4b79a1 : 0xffffff); // White tint for blob
-    this.player.setScale(team === "earthling" ? 0.5 : 0.2); // Smaller scale for blob
 
     // Join game with selected team
     this.gameService.joinGame(team);
@@ -233,16 +256,28 @@ export default class GameScene extends Phaser.Scene {
   private updateOtherPlayer(id: string, playerData: Player) {
     let otherPlayer = this.otherPlayers.get(id);
     if (!otherPlayer) {
+      let texture = "player";
+      let tint = 0x4b79a1;
+      let scale = 0.5;
+
+      if (playerData.team === "chillFlyer") {
+        texture = "player2";
+        tint = 0x9b59b6;
+        scale = 0.5;
+      } else if (playerData.team === "blob") {
+        texture = "blob";
+        tint = 0xffffff;
+        scale = 0.2;
+      }
+
       otherPlayer = this.physics.add.sprite(
         playerData.x,
         playerData.y,
-        playerData.team === "earthling" ? "player" : "blob"
+        texture
       );
-      otherPlayer.setTint(
-        playerData.team === "earthling" ? 0x4b79a1 : 0xffffff // White tint for blob
-      );
+      otherPlayer.setTint(tint);
       otherPlayer.setOrigin(0.5, 0.5);
-      otherPlayer.setScale(playerData.team === "earthling" ? 0.5 : 0.2); // Smaller scale for blob
+      otherPlayer.setScale(scale);
       this.otherPlayers.set(id, otherPlayer);
 
       // Add health bar for other player
@@ -345,11 +380,6 @@ export default class GameScene extends Phaser.Scene {
         yoyo: true,
         repeat: -1,
       });
-
-      // Set up explosion after delay
-      this.time.delayedCall(2000, () => {
-        this.handleProjectileHit(projectile, projectile);
-      });
     }
   }
 
@@ -381,7 +411,8 @@ export default class GameScene extends Phaser.Scene {
 
     // Handle damage
     if (target === this.player) {
-      this.playerHealth -= 20;
+      // Take damage instead of instant death
+      this.playerHealth = Math.max(0, this.playerHealth - 20);
       this.updateHealthBar();
       this.gameService.updatePlayerHealth(this.playerHealth);
 
@@ -550,18 +581,34 @@ export default class GameScene extends Phaser.Scene {
         "Are you sure you want to reset the game? This will remove all players and projectiles."
       )
     ) {
-      // Reset the game state
+      // Reset the game state in Firebase
       this.gameService.resetGame();
 
       // Clear local state
-      this.otherPlayers.forEach((player) => player.destroy());
+      this.otherPlayers.forEach((player) => {
+        const healthBar = player.getData(
+          "healthBar"
+        ) as Phaser.GameObjects.Graphics;
+        if (healthBar) {
+          healthBar.destroy();
+        }
+        player.destroy();
+      });
       this.otherPlayers.clear();
+
       this.projectiles.forEach((projectile) => projectile.destroy());
       this.projectiles.clear();
 
-      // Reset player health
+      // Reset player health and position
       this.playerHealth = this.maxHealth;
+      this.player.setPosition(
+        Math.random() * this.scale.width,
+        Math.random() * this.scale.height
+      );
+      this.player.setVisible(true);
+      this.healthBar.setVisible(true);
       this.updateHealthBar();
+      this.gameService.updatePlayerHealth(this.playerHealth);
 
       // Show team selection modal again
       this.showTeamSelection = true;

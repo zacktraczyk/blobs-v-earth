@@ -23,7 +23,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
-export type Team = "earthling" | "blob";
+export type Team = "earthling" | "blob" | "chillFlyer";
 
 export interface Player {
   x: number;
