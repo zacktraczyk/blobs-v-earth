@@ -4,6 +4,7 @@ export default class GameScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private earth!: Phaser.GameObjects.Sprite;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wasd!: { [key: string]: Phaser.Input.Keyboard.Key };
   private invaders!: Phaser.Physics.Arcade.Group;
   private projectiles!: Phaser.Physics.Arcade.Group;
   private lastFired: number = 0;
@@ -47,6 +48,12 @@ export default class GameScene extends Phaser.Scene {
 
     // Setup input
     this.cursors = this.input.keyboard.createCursorKeys();
+    this.wasd = {
+      W: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+      A: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+      S: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      D: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+    };
 
     // Create groups for invaders and projectiles
     this.invaders = this.physics.add.group();
@@ -94,33 +101,45 @@ export default class GameScene extends Phaser.Scene {
   update() {
     if (!this.player) return;
 
-    // Player movement
-    if (this.cursors.left.isDown) {
+    // Player movement with WASD
+    if (this.wasd.A.isDown) {
       this.player.setVelocityX(-this.gameSpeed);
-    } else if (this.cursors.right.isDown) {
+    } else if (this.wasd.D.isDown) {
       this.player.setVelocityX(this.gameSpeed);
     } else {
       this.player.setVelocityX(0);
     }
 
-    if (this.cursors.up.isDown) {
+    if (this.wasd.W.isDown) {
       this.player.setVelocityY(-this.gameSpeed);
-    } else if (this.cursors.down.isDown) {
+    } else if (this.wasd.S.isDown) {
       this.player.setVelocityY(this.gameSpeed);
     } else {
       this.player.setVelocityY(0);
     }
 
-    // Shooting
+    // Rotate player to face mouse
+    const pointer = this.input.activePointer;
+    const angle = Phaser.Math.Angle.Between(
+      this.player.x,
+      this.player.y,
+      pointer.x,
+      pointer.y
+    );
+    this.player.setRotation(angle);
+
+    // Shooting towards mouse
     const time = this.time.now;
-    if (this.cursors.space.isDown && time - this.lastFired > 250) {
+    if (pointer.isDown && time - this.lastFired > 250) {
       const projectile = this.projectiles.create(
         this.player.x,
         this.player.y,
         "projectile"
       );
       if (projectile) {
-        projectile.setVelocityX(400);
+        const speed = 400;
+        projectile.setVelocityX(Math.cos(angle) * speed);
+        projectile.setVelocityY(Math.sin(angle) * speed);
       }
       this.lastFired = time;
     }
