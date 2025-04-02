@@ -37,7 +37,7 @@ export default class GameScene extends Phaser.Scene {
   preload() {
     // Load game assets
     this.load.image("player", "assets/player.png");
-    this.load.image("blob", "assets/invader.png");
+    this.load.image("blob", "assets/Blob.png");
     this.load.image("projectile", "assets/projectile.png");
     this.load.image("background", "assets/Earth background.png");
   }
@@ -185,7 +185,8 @@ export default class GameScene extends Phaser.Scene {
     // Update player appearance based on team
     this.player.setTexture(team === "earthling" ? "player" : "blob");
     this.player.setVisible(true);
-    this.player.setTint(team === "earthling" ? 0x4b79a1 : 0x27ae60);
+    this.player.setTint(team === "earthling" ? 0x4b79a1 : 0xffffff); // White tint for blob
+    this.player.setScale(team === "earthling" ? 0.5 : 0.2); // Smaller scale for blob
 
     // Join game with selected team
     this.gameService.joinGame(team);
@@ -238,10 +239,10 @@ export default class GameScene extends Phaser.Scene {
         playerData.team === "earthling" ? "player" : "blob"
       );
       otherPlayer.setTint(
-        playerData.team === "earthling" ? 0x4b79a1 : 0x27ae60
+        playerData.team === "earthling" ? 0x4b79a1 : 0xffffff // White tint for blob
       );
       otherPlayer.setOrigin(0.5, 0.5);
-      otherPlayer.setScale(0.5);
+      otherPlayer.setScale(playerData.team === "earthling" ? 0.5 : 0.2); // Smaller scale for blob
       this.otherPlayers.set(id, otherPlayer);
 
       // Add health bar for other player
@@ -347,16 +348,21 @@ export default class GameScene extends Phaser.Scene {
     const hitEffect = this.add.particles(0, 0, "projectile", {
       x: target.x,
       y: target.y,
-      speed: 50,
-      scale: { start: 0.3, end: 0 },
-      alpha: { start: 0.8, end: 0 },
-      lifespan: 300,
-      quantity: 8,
+      speed: 200,
+      scale: { start: 1, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: 500,
+      quantity: 20,
       blendMode: "ADD",
+      emitting: true,
+      emitZone: {
+        type: "random",
+        source: new Phaser.Geom.Circle(target.x, target.y, 10),
+      },
     });
 
     // Remove hit effect after animation
-    this.time.delayedCall(300, () => {
+    this.time.delayedCall(500, () => {
       hitEffect.destroy();
     });
 
@@ -394,12 +400,17 @@ export default class GameScene extends Phaser.Scene {
     const deathEffect = this.add.particles(0, 0, "projectile", {
       x: this.player.x,
       y: this.player.y,
-      speed: 100,
-      scale: { start: 0.5, end: 0 },
+      speed: 300,
+      scale: { start: 2, end: 0 },
       alpha: { start: 1, end: 0 },
-      lifespan: 1000,
-      quantity: 20,
+      lifespan: 1500,
+      quantity: 40,
       blendMode: "ADD",
+      emitting: true,
+      emitZone: {
+        type: "random",
+        source: new Phaser.Geom.Circle(this.player.x, this.player.y, 20),
+      },
     });
 
     // Hide player
