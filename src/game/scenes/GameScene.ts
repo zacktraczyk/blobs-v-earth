@@ -45,6 +45,8 @@ export default class GameScene extends Phaser.Scene {
     // Create player
     this.player = this.physics.add.sprite(100, this.scale.height / 2, "player");
     this.player.setCollideWorldBounds(true);
+    // Set the origin to the center of the sprite for proper rotation
+    this.player.setOrigin(0.5, 0.5);
 
     // Setup input
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -126,16 +128,18 @@ export default class GameScene extends Phaser.Scene {
       pointer.x,
       pointer.y
     );
-    this.player.setRotation(angle);
+    // Add Math.PI/2 to make the ship point in the correct direction
+    this.player.setRotation(angle + Math.PI / 2);
 
     // Shooting towards mouse
     const time = this.time.now;
     if (pointer.isDown && time - this.lastFired > 250) {
-      const projectile = this.projectiles.create(
-        this.player.x,
-        this.player.y,
-        "projectile"
-      );
+      // Calculate spawn position at the front of the ship
+      const spawnOffset = 30; // Adjust this value based on your ship's size
+      const spawnX = this.player.x + Math.cos(angle) * spawnOffset;
+      const spawnY = this.player.y + Math.sin(angle) * spawnOffset;
+
+      const projectile = this.projectiles.create(spawnX, spawnY, "projectile");
       if (projectile) {
         const speed = 400;
         projectile.setVelocityX(Math.cos(angle) * speed);
