@@ -315,7 +315,6 @@ export default class GameScene extends Phaser.Scene {
       );
       projectile.setOrigin(0.5, 0.5);
       projectile.setScale(0.3);
-      projectile.setRotation(projectileData.angle);
       this.projectiles.set(id, projectile);
 
       // Add collision detection
@@ -337,6 +336,20 @@ export default class GameScene extends Phaser.Scene {
           this
         );
       });
+
+      // Create pulsing effect for the mine
+      this.tweens.add({
+        targets: projectile,
+        scale: 0.5,
+        duration: 500,
+        yoyo: true,
+        repeat: -1,
+      });
+
+      // Set up explosion after delay
+      this.time.delayedCall(2000, () => {
+        this.handleProjectileHit(projectile, projectile);
+      });
     }
   }
 
@@ -346,29 +359,29 @@ export default class GameScene extends Phaser.Scene {
   ) {
     // Create hit effect
     const hitEffect = this.add.particles(0, 0, "projectile", {
-      x: target.x,
-      y: target.y,
-      speed: 200,
-      scale: { start: 1, end: 0 },
+      x: projectile.x,
+      y: projectile.y,
+      speed: 300,
+      scale: { start: 2, end: 0 },
       alpha: { start: 1, end: 0 },
-      lifespan: 500,
-      quantity: 20,
+      lifespan: 1000,
+      quantity: 30,
       blendMode: "ADD",
       emitting: true,
       emitZone: {
         type: "random",
-        source: new Phaser.Geom.Circle(target.x, target.y, 10),
+        source: new Phaser.Geom.Circle(projectile.x, projectile.y, 30),
       },
     });
 
     // Remove hit effect after animation
-    this.time.delayedCall(500, () => {
+    this.time.delayedCall(1000, () => {
       hitEffect.destroy();
     });
 
     // Handle damage
     if (target === this.player) {
-      this.playerHealth -= 10;
+      this.playerHealth -= 20;
       this.updateHealthBar();
       this.gameService.updatePlayerHealth(this.playerHealth);
 
@@ -384,7 +397,7 @@ export default class GameScene extends Phaser.Scene {
       if (playerId) {
         const playerData = this.gameService.getPlayerData(playerId);
         if (playerData) {
-          const newHealth = Math.max(0, playerData.health - 10);
+          const newHealth = Math.max(0, playerData.health - 20);
           this.gameService.updateOtherPlayerHealth(playerId, newHealth);
         }
       }
@@ -524,17 +537,8 @@ export default class GameScene extends Phaser.Scene {
     const now = Date.now();
     if (now - this.lastShootTime < this.shootCooldown) return;
 
-    const angle = this.player.rotation;
-    const spawnOffset = 30;
-    const spawnX = this.player.x + Math.cos(angle) * spawnOffset;
-    const spawnY = this.player.y + Math.sin(angle) * spawnOffset;
-
-    // Show particle effect
-    this.shootEffect.setPosition(spawnX, spawnY);
-    this.shootEffect.setAngle(angle * (180 / Math.PI));
-    this.shootEffect.start();
-
-    this.gameService.fireProjectile(spawnX, spawnY, angle, this.team);
+    // Spawn mine at player's position
+    this.gameService.fireProjectile(this.player.x, this.player.y, this.team);
 
     this.lastShootTime = now;
   }

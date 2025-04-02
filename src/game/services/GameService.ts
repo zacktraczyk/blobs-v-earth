@@ -38,11 +38,11 @@ export interface Player {
 }
 
 export interface Projectile {
+  id: string;
   x: number;
   y: number;
-  angle: number;
   team: Team;
-  timestamp: number;
+  lastUpdate: number;
 }
 
 export class GameService {
@@ -106,15 +106,20 @@ export class GameService {
     });
   }
 
-  fireProjectile(x: number, y: number, angle: number, team: Team) {
-    const projectileRef = push(this.projectilesRef);
-    set(projectileRef, {
+  fireProjectile(x: number, y: number, team: Team) {
+    const projectileId = `projectile_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
+    const projectile: Projectile = {
+      id: projectileId,
       x,
       y,
-      angle,
       team,
-      timestamp: serverTimestamp(),
-    });
+      lastUpdate: Date.now(),
+    };
+
+    set(ref(database, `gameState/projectiles/${projectileId}`), projectile);
   }
 
   onGameStateUpdate(callback: (state: any) => void) {
