@@ -1,14 +1,25 @@
-import "phaser";
+import Phaser from "phaser";
+import { GameService, Player, Projectile, Team } from "../services/GameService";
+import { TeamSelectionModal } from "../../components/TeamSelectionModal";
 
 export default class GameScene extends Phaser.Scene {
-  private player!: Phaser.Physics.Arcade.Sprite;
-  private earth!: Phaser.GameObjects.Sprite;
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private wasd!: { [key: string]: Phaser.Input.Keyboard.Key };
-  private invaders!: Phaser.Physics.Arcade.Group;
-  private projectiles!: Phaser.Physics.Arcade.Group;
-  private lastFired: number = 0;
+  private gameService: GameService;
+  private player: Phaser.Physics.Arcade.Sprite;
+  private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
+  private projectiles: Map<string, Phaser.Physics.Arcade.Sprite>;
+  private otherPlayers: Map<string, Phaser.Physics.Arcade.Sprite>;
+  private playerId: string;
+  private team: Team;
+  private lastUpdateTime: number = 0;
+  private updateInterval: number = 1000 / 60; // 60 FPS
   private gameSpeed: number = 200;
+  private wasd: {
+    W: Phaser.Input.Keyboard.Key;
+    A: Phaser.Input.Keyboard.Key;
+    S: Phaser.Input.Keyboard.Key;
+    D: Phaser.Input.Keyboard.Key;
+  };
+  private showTeamSelection: boolean = true;
 
   constructor() {
     super({ key: "GameScene" });
@@ -16,15 +27,14 @@ export default class GameScene extends Phaser.Scene {
 
   preload() {
     // Load game assets
-    this.load.image("earth", "assets/earth.png");
     this.load.image("player", "assets/player.png");
-    this.load.image("invader", "assets/invader.png");
+    this.load.image("blob", "assets/blob.png");
     this.load.image("projectile", "assets/projectile.png");
     this.load.image("background", "assets/background.png");
   }
 
   create() {
-    // Add background that covers the entire game area
+    // Add background
     const background = this.add.tileSprite(
       0,
       0,
@@ -34,21 +44,17 @@ export default class GameScene extends Phaser.Scene {
     );
     background.setOrigin(0, 0);
 
-    // Add Earth in the center
-    this.earth = this.add.sprite(
-      this.scale.width / 2,
-      this.scale.height / 2,
-      "earth"
-    );
-    this.earth.setScale(2);
+    // Generate a unique player ID if not already set
+    this.playerId = `player_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    this.gameService = new GameService(this.playerId);
 
-    // Create player
-    this.player = this.physics.add.sprite(100, this.scale.height / 2, "player");
-    this.player.setCollideWorldBounds(true);
-    // Set the origin to the center of the sprite for proper rotation
-    this.player.setOrigin(0.5, 0.5);
+    // Initialize game state
+    this.otherPlayers = new Map();
+    this.projectiles = new Map();
 
-    // Setup input
+    // Set up input
     this.cursors = this.input.keyboard.createCursorKeys();
     this.wasd = {
       W: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
@@ -57,32 +63,93 @@ export default class GameScene extends Phaser.Scene {
       D: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
 
-    // Create groups for invaders and projectiles
-    this.invaders = this.physics.add.group();
-    this.projectiles = this.physics.add.group();
+    // Create player sprite (will be updated after team selection)
+    this.player = this.physics.add.sprite(400, 300, "player");
+    this.player.setCollideWorldBounds(true);
+    this.player.setOrigin(0.5, 0.5);
+    this.player.setScale(0.5);
+    this.player.setVisible(false); // Hide until team is selected
 
-    // Spawn invaders periodically
-    this.time.addEvent({
-      delay: 2000,
-      callback: this.spawnInvader,
-      callbackScope: this,
-      loop: true,
+    // Set up physics
+    this.physics.world.setBounds(0, 0, window.innerWidth, window.innerHeight);
+
+    // Listen for game state updates
+    this.gameService.onGameStateUpdate((state) => {
+      this.handleGameStateUpdate(state);
     });
-
-    // Add collision detection
-    this.physics.add.overlap(
-      this.projectiles,
-      this.invaders,
-      this.hitInvader,
-      undefined,
-      this
-    );
 
     // Handle window resize
     this.scale.on("resize", this.resize, this);
+
+    // Show team selection modal
+    this.showTeamSelectionModal();
   }
 
-  resize(gameSize: Phaser.Structs.Size) {
+  private showTeamSelectionModal() {
+    const modal = document.createElement("div");
+    modal.style.position = "fixed";
+    modal.style.top = "50%";
+    modal.style.left = "50%";
+    modal.style.transform = "translate(-50%, -50%)";
+    modal.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+    modal.style.padding = "20px";
+    modal.style.borderRadius = "10px";
+    modal.style.color = "white";
+    modal.style.textAlign = "center";
+    modal.style.zIndex = "1000";
+
+    const title = document.createElement("h2");
+    title.textContent = "Choose Your Team";
+    modal.appendChild(title);
+
+    const earthlingButton = document.createElement("button");
+    earthlingButton.textContent = "Earthling";
+    earthlingButton.style.margin = "10px";
+    earthlingButton.style.padding = "10px 20px";
+    earthlingButton.style.backgroundColor = "#4B79A1";
+    earthlingButton.style.border = "none";
+    earthlingButton.style.borderRadius = "5px";
+    earthlingButton.style.color = "white";
+    earthlingButton.style.cursor = "pointer";
+    earthlingButton.onclick = () => this.handleTeamSelect("earthling");
+
+    const blobButton = document.createElement("button");
+    blobButton.textContent = "Blob";
+    blobButton.style.margin = "10px";
+    blobButton.style.padding = "10px 20px";
+    blobButton.style.backgroundColor = "#27AE60";
+    blobButton.style.border = "none";
+    blobButton.style.borderRadius = "5px";
+    blobButton.style.color = "white";
+    blobButton.style.cursor = "pointer";
+    blobButton.onclick = () => this.handleTeamSelect("blob");
+
+    modal.appendChild(earthlingButton);
+    modal.appendChild(blobButton);
+    document.body.appendChild(modal);
+  }
+
+  private handleTeamSelect(team: Team) {
+    this.team = team;
+    this.showTeamSelection = false;
+
+    // Update player appearance based on team
+    this.player.setTexture(team === "earthling" ? "player" : "blob");
+    this.player.setVisible(true);
+    this.player.setTint(team === "earthling" ? 0x4b79a1 : 0x27ae60);
+
+    // Join game with selected team
+    this.gameService.joinGame(team);
+    this.gameService.startGame();
+
+    // Remove the modal
+    const modal = document.querySelector("div[style*='z-index: 1000']");
+    if (modal) {
+      modal.remove();
+    }
+  }
+
+  private resize(gameSize: Phaser.Structs.Size) {
     // Update background
     const background = this.children.list.find(
       (child) => child instanceof Phaser.GameObjects.TileSprite
@@ -91,19 +158,71 @@ export default class GameScene extends Phaser.Scene {
       background.setSize(gameSize.width, gameSize.height);
     }
 
-    // Update earth position
-    if (this.earth) {
-      this.earth.setPosition(gameSize.width / 2, gameSize.height / 2);
-    }
-
     // Update world bounds
     this.physics.world.setBounds(0, 0, gameSize.width, gameSize.height);
   }
 
-  update() {
-    if (!this.player) return;
+  private handleGameStateUpdate(state: any) {
+    // Update other players
+    Object.entries(state.players || {}).forEach(([id, playerData]) => {
+      if (id !== this.playerId) {
+        this.updateOtherPlayer(id, playerData as Player);
+      }
+    });
 
-    // Player movement with WASD
+    // Update projectiles
+    Object.entries(state.projectiles || {}).forEach(([id, projectileData]) => {
+      this.updateProjectile(id, projectileData as Projectile);
+    });
+  }
+
+  private updateOtherPlayer(id: string, playerData: Player) {
+    let otherPlayer = this.otherPlayers.get(id);
+    if (!otherPlayer) {
+      otherPlayer = this.physics.add.sprite(
+        playerData.x,
+        playerData.y,
+        playerData.team === "earthling" ? "player" : "blob"
+      );
+      otherPlayer.setTint(
+        playerData.team === "earthling" ? 0x4b79a1 : 0x27ae60
+      );
+      otherPlayer.setOrigin(0.5, 0.5);
+      otherPlayer.setScale(0.5);
+      this.otherPlayers.set(id, otherPlayer);
+    } else {
+      otherPlayer.setPosition(playerData.x, playerData.y);
+      otherPlayer.setRotation(playerData.rotation);
+    }
+  }
+
+  private updateProjectile(id: string, projectileData: Projectile) {
+    let projectile = this.projectiles.get(id);
+    if (!projectile) {
+      projectile = this.physics.add.sprite(
+        projectileData.x,
+        projectileData.y,
+        "projectile"
+      );
+      projectile.setTint(
+        projectileData.team === "earthling" ? 0x4b79a1 : 0x27ae60
+      );
+      projectile.setOrigin(0.5, 0.5);
+      projectile.setScale(0.3);
+      this.projectiles.set(id, projectile);
+    } else {
+      projectile.setPosition(projectileData.x, projectileData.y);
+      projectile.setRotation(projectileData.angle);
+    }
+  }
+
+  update() {
+    if (this.showTeamSelection) return;
+
+    const now = Date.now();
+    if (now - this.lastUpdateTime < this.updateInterval) return;
+
+    // Handle player movement with WASD
     if (this.wasd.A.isDown) {
       this.player.setVelocityX(-this.gameSpeed);
     } else if (this.wasd.D.isDown) {
@@ -120,7 +239,7 @@ export default class GameScene extends Phaser.Scene {
       this.player.setVelocityY(0);
     }
 
-    // Rotate player to face mouse
+    // Calculate rotation based on mouse position
     const pointer = this.input.activePointer;
     const angle = Phaser.Math.Angle.Between(
       this.player.x,
@@ -128,89 +247,36 @@ export default class GameScene extends Phaser.Scene {
       pointer.x,
       pointer.y
     );
-    // Add Math.PI/2 to make the ship point in the correct direction
-    this.player.setRotation(angle + Math.PI / 2);
+    this.player.setRotation(angle);
 
-    // Shooting towards mouse
-    const time = this.time.now;
-    if (pointer.isDown && time - this.lastFired > 250) {
-      // Calculate spawn position at the front of the ship
-      const spawnOffset = 30; // Adjust this value based on your ship's size
-      const spawnX = this.player.x + Math.cos(angle) * spawnOffset;
-      const spawnY = this.player.y + Math.sin(angle) * spawnOffset;
+    // Update player state in Firebase
+    this.gameService.updatePlayerState(
+      this.player.x,
+      this.player.y,
+      this.player.rotation,
+      this.player.body.velocity.x,
+      this.player.body.velocity.y
+    );
 
-      const projectile = this.projectiles.create(spawnX, spawnY, "projectile");
-      if (projectile) {
-        const speed = 400;
-        projectile.setVelocityX(Math.cos(angle) * speed);
-        projectile.setVelocityY(Math.sin(angle) * speed);
-      }
-      this.lastFired = time;
+    // Handle shooting
+    if (pointer.isDown) {
+      this.shoot();
     }
 
-    // Move invaders towards Earth
-    this.invaders.children.each((invader: any) => {
-      const angle = Phaser.Math.Angle.Between(
-        invader.x,
-        invader.y,
-        this.earth.x,
-        this.earth.y
-      );
-      invader.setVelocityX(Math.cos(angle) * 100);
-      invader.setVelocityY(Math.sin(angle) * 100);
-      return true;
-    });
+    this.lastUpdateTime = now;
   }
 
-  private spawnInvader() {
-    const side = Phaser.Math.Between(0, 3); // 0: top, 1: right, 2: bottom, 3: left
-    let x = 0;
-    let y = 0;
+  private shoot() {
+    const projectileSpeed = 400;
+    const angle = this.player.rotation;
+    const spawnOffset = 30; // Spawn projectile at the front of the player
+    const spawnX = this.player.x + Math.cos(angle) * spawnOffset;
+    const spawnY = this.player.y + Math.sin(angle) * spawnOffset;
 
-    switch (side) {
-      case 0: // top
-        x = Phaser.Math.Between(0, this.scale.width);
-        y = -50;
-        break;
-      case 1: // right
-        x = this.scale.width + 50;
-        y = Phaser.Math.Between(0, this.scale.height);
-        break;
-      case 2: // bottom
-        x = Phaser.Math.Between(0, this.scale.width);
-        y = this.scale.height + 50;
-        break;
-      case 3: // left
-        x = -50;
-        y = Phaser.Math.Between(0, this.scale.height);
-        break;
-    }
-
-    const invader = this.invaders.create(x, y, "invader");
-    if (invader) {
-      invader.setScale(0.5);
-    }
+    this.gameService.fireProjectile(spawnX, spawnY, angle, projectileSpeed, 10);
   }
 
-  private hitInvader(
-    projectile:
-      | Phaser.Tilemaps.Tile
-      | Phaser.Tilemaps.LayerData
-      | Phaser.GameObjects.GameObject
-      | Phaser.Physics.Arcade.Body
-      | Phaser.Physics.Arcade.StaticBody,
-    invader:
-      | Phaser.Tilemaps.Tile
-      | Phaser.Tilemaps.LayerData
-      | Phaser.GameObjects.GameObject
-      | Phaser.Physics.Arcade.Body
-      | Phaser.Physics.Arcade.StaticBody
-  ) {
-    if (projectile instanceof Phaser.GameObjects.GameObject) {
-      projectile.destroy();
-    }
-    if (invader instanceof Phaser.GameObjects.GameObject) {
-      invader.destroy();
-    }
+  shutdown() {
+    this.gameService.leaveGame();
   }
 }

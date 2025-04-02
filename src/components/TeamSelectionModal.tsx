@@ -1,6 +1,6 @@
 import { GameService } from "../game/services/GameService";
 
-type Team = "red" | "blue";
+type Team = "earthling" | "blob";
 
 interface TeamSelectionModalProps {
   onTeamSelect: (team: Team) => void;
@@ -14,21 +14,25 @@ export function TeamSelectionModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-lg">
-        <h2 className="text-2xl font-bold mb-4">Select Your Team</h2>
-        <div className="flex gap-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-8 rounded-lg shadow-xl">
+        <h2 className="text-2xl font-bold mb-6 text-center">
+          Choose Your Team
+        </h2>
+        <div className="flex gap-6">
           <button
-            onClick={() => onTeamSelect("red")}
-            className="bg-red-500 text-white px-6 py-2 rounded hover:bg-red-600"
+            onClick={() => onTeamSelect("earthling")}
+            className="bg-blue-500 text-white px-8 py-4 rounded-lg hover:bg-blue-600 transition-colors flex flex-col items-center"
           >
-            Join Red Team
+            <span className="text-xl font-semibold">Earthling</span>
+            <span className="text-sm mt-2">Defend Earth</span>
           </button>
           <button
-            onClick={() => onTeamSelect("blue")}
-            className="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600"
+            onClick={() => onTeamSelect("blob")}
+            className="bg-green-500 text-white px-8 py-4 rounded-lg hover:bg-green-600 transition-colors flex flex-col items-center"
           >
-            Join Blue Team
+            <span className="text-xl font-semibold">Blob</span>
+            <span className="text-sm mt-2">Invade Earth</span>
           </button>
         </div>
       </div>
